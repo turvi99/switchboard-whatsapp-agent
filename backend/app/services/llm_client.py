@@ -1,12 +1,17 @@
 """
 LLM access layer. Kept separate from the LangGraph nodes so the rest of the
-graph never has to care whether we're talking to OpenAI or Anthropic.
+graph never has to care whether we're talking to OpenAI, Anthropic, or Groq.
 
 `AgentDecision` is the structured-output schema the reasoning node forces the
 model into - this is how the "Agentic Decision-Making" requirement
 (plain text vs. attach an image/document from the tenant's library) is
 implemented: instead of brittle string parsing or manual tool-call plumbing,
 we ask the model to return one well-typed object and branch on it.
+
+Supported providers:
+  - openai    → ChatOpenAI (requires paid API key)
+  - anthropic → ChatAnthropic (requires paid API key)
+  - groq      → ChatGroq using Llama-3.3-70b (FREE tier at console.groq.com)
 """
 from __future__ import annotations
 
@@ -47,21 +52,34 @@ class AgentDecision(BaseModel):
 
 def get_chat_model(structured: bool = False):
     """Returns a LangChain chat model configured from env, optionally bound
-    to the AgentDecision structured-output schema."""
+    to the AgentDecision structured-output schema.
+
+    Provider priority (set LLM_PROVIDER env var):
+      groq      → free, no credit card, uses Llama-3.3-70b via Groq API
+      openai    → GPT-4o-mini
+      anthropic → Claude
+    """
     settings = get_settings()
 
     model: BaseChatModel
-    if settings.llm_provider == "anthropic":
-        from langchain_anthropic import ChatAnthropic
 
+    if settings.llm_provider == "groq":
+        from langchain_groq import ChatGroq
+        model = ChatGroq(
+            model=settings.groq_model,
+            api_key=settings.groq_api_key or None,
+            temperature=0.4,
+        )
+    elif settings.llm_provider == "anthropic":
+        from langchain_anthropic import ChatAnthropic
         model = ChatAnthropic(
             model=settings.anthropic_model,
             api_key=settings.anthropic_api_key or None,
             temperature=0.4,
         )
     else:
+        # Default: OpenAI
         from langchain_openai import ChatOpenAI
-
         model = ChatOpenAI(
             model=settings.openai_model,
             api_key=settings.openai_api_key or None,
@@ -81,11 +99,37 @@ async def describe_inbound_image(image_bytes: bytes, mime_type: str = "image/jpe
     one layer up) and asks a vision-capable model to describe it in one or
     two sentences so it can be folded into the chat history / context the
     reasoning node sees next.
+
+    Note: Groq's vision model (llava) is used when LLM_PROVIDER=groq.
     """
     b64 = base64.b64encode(image_bytes).decode("utf-8")
-    model = get_chat_model(structured=False)
+    settings = get_settings()
+
+    # Use a vision-capable model regardless of the main reasoning provider
     try:
-        result = await model.ainvoke(
+        if settings.llm_provider == "groq":
+            from langchain_groq import ChatGroq
+            vision_model = ChatGroq(
+                model="meta-llama/llama-4-scout-17b-16e-instruct",  # Groq's free vision model
+                api_key=settings.groq_api_key or None,
+                temperature=0,
+            )
+        elif settings.llm_provider == "anthropic":
+            from langchain_anthropic import ChatAnthropic
+            vision_model = ChatAnthropic(
+                model=settings.anthropic_model,
+                api_key=settings.anthropic_api_key or None,
+                temperature=0,
+            )
+        else:
+            from langchain_openai import ChatOpenAI
+            vision_model = ChatOpenAI(
+                model="gpt-4o-mini",
+                api_key=settings.openai_api_key or None,
+                temperature=0,
+            )
+
+        result = await vision_model.ainvoke(
             [
                 {
                     "role": "user",

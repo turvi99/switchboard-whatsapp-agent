@@ -40,11 +40,13 @@ class Settings(BaseSettings):
     dry_run_whatsapp: bool = False
 
     # --- LLM provider -----------------------------------------------------
-    llm_provider: Literal["openai", "anthropic"] = "openai"
+    llm_provider: Literal["openai", "anthropic", "groq"] = "openai"
     openai_api_key: str = ""
     openai_model: str = "gpt-4o-mini"
     anthropic_api_key: str = ""
     anthropic_model: str = "claude-sonnet-4-6"
+    groq_api_key: str = ""          # free tier at console.groq.com
+    groq_model: str = "llama-3.3-70b-versatile"  # best free Groq model
 
     # --- Misc -------------------------------------------------------------
     cors_origins: str = "*"
