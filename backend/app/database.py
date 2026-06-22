@@ -48,9 +48,9 @@ async def connect_to_mongo() -> None:
         # Ping first so we get a clear error if the URI is wrong.
         await _db.command("ping")
         await _db.tenants.create_index("tenant_id", unique=True)
-        await _db.chat_sessions.create_index([(("tenant_id", 1), ("customer_phone", 1))], unique=True)
-        await _db.chat_sessions.create_index([(("tenant_id", 1), ("status", 1))])
-        await _db.messages.create_index([(("tenant_id", 1), ("session_id", 1), ("timestamp", 1))])
+        await _db.chat_sessions.create_index([("tenant_id", 1), ("customer_phone", 1)], unique=True)
+        await _db.chat_sessions.create_index([("tenant_id", 1), ("status", 1)])
+        await _db.messages.create_index([("tenant_id", 1), ("session_id", 1), ("timestamp", 1)])
         await _db.messages.create_index("wa_message_id")
         _db_ready = True
         logger.info("Connected to MongoDB database '%s'", settings.mongo_db_name)
