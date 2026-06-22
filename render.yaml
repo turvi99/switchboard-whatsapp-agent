@@ -1,0 +1,61 @@
+# Render.com deployment configuration
+# Deploy by connecting this repo to Render and clicking "New Blueprint"
+# or run: render deploy
+#
+# This creates:
+#   - A Web Service running the FastAPI backend + built React dashboard
+#   - The service reads all secrets from Render's environment group
+#
+# IMPORTANT: Set these environment variables in your Render dashboard
+# (or in the Environment Group "switchboard-secrets"):
+#   MONGO_URI              → your MongoDB Atlas connection string
+#   WHATSAPP_ACCESS_TOKEN  → Meta App > WhatsApp > API Setup
+#   WHATSAPP_PHONE_NUMBER_ID
+#   WHATSAPP_BUSINESS_ACCOUNT_ID
+#   WHATSAPP_VERIFY_TOKEN  → any string you choose (match in Meta App)
+#   WHATSAPP_APP_SECRET    → Meta App Settings > Basic > App Secret
+#   OPENAI_API_KEY         → (or ANTHROPIC_API_KEY + set LLM_PROVIDER=anthropic)
+#   DRY_RUN_WHATSAPP       → set to "false" once you're ready for live traffic
+
+services:
+  - type: web
+    name: switchboard
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    # Render injects PORT automatically; our Dockerfile reads $PORT
+    plan: free          # upgrade to starter for always-on
+    region: oregon
+    branch: main
+
+    healthCheckPath: /api/health
+
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: MONGO_DB_NAME
+        value: whatsapp_agent
+      - key: DRY_RUN_WHATSAPP
+        value: "false"
+      - key: CORS_ORIGINS
+        value: "*"
+      - key: SENTIMENT_HANDOVER_ENABLED
+        value: "true"
+      - key: LLM_PROVIDER
+        value: openai
+      # Secrets – set these in Render Dashboard > Environment
+      - key: MONGO_URI
+        sync: false
+      - key: WHATSAPP_ACCESS_TOKEN
+        sync: false
+      - key: WHATSAPP_PHONE_NUMBER_ID
+        sync: false
+      - key: WHATSAPP_BUSINESS_ACCOUNT_ID
+        sync: false
+      - key: WHATSAPP_VERIFY_TOKEN
+        sync: false
+      - key: WHATSAPP_APP_SECRET
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false

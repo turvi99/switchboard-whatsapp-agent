@@ -1,0 +1,52 @@
+# Fly.io deployment configuration
+# Deploy with: fly launch --no-deploy && fly secrets set ... && fly deploy
+#
+# Prerequisites:
+#   1. Install flyctl: https://fly.io/docs/hands-on/install-flyctl/
+#   2. Login: fly auth login
+#   3. Set secrets (see below)
+#
+# Set secrets before deploying:
+#   fly secrets set \
+#     MONGO_URI="mongodb+srv://..." \
+#     WHATSAPP_ACCESS_TOKEN="..." \
+#     WHATSAPP_PHONE_NUMBER_ID="..." \
+#     WHATSAPP_BUSINESS_ACCOUNT_ID="..." \
+#     WHATSAPP_VERIFY_TOKEN="your-verify-token" \
+#     WHATSAPP_APP_SECRET="..." \
+#     OPENAI_API_KEY="sk-..."
+
+app = "switchboard-agent"
+primary_region = "iad"          # Washington DC; change to nearest region
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  ENVIRONMENT = "production"
+  PORT = "8080"
+  MONGO_DB_NAME = "whatsapp_agent"
+  DRY_RUN_WHATSAPP = "false"
+  CORS_ORIGINS = "*"
+  SENTIMENT_HANDOVER_ENABLED = "true"
+  LLM_PROVIDER = "openai"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = true
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [[http_service.checks]]
+    grace_period = "10s"
+    interval = "30s"
+    method = "GET"
+    path = "/api/health"
+    protocol = "http"
+    timeout = "5s"
+
+[[vm]]
+  cpu_kind = "shared"
+  cpus = 1
+  memory_mb = 512

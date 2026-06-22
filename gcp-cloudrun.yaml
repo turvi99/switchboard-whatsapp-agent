@@ -1,0 +1,106 @@
+# GCP Cloud Run deployment manifest
+# Deploy with:
+#   gcloud run services replace gcp-cloudrun.yaml --region=us-central1
+#
+# Prerequisites:
+#   1. gcloud auth login && gcloud auth configure-docker
+#   2. Build and push:
+#        docker build -t gcr.io/<PROJECT_ID>/switchboard .
+#        docker push gcr.io/<PROJECT_ID>/switchboard
+#   3. Create secrets in Secret Manager:
+#        gcloud secrets create MONGO_URI --data-file=-
+#        gcloud secrets create WHATSAPP_ACCESS_TOKEN --data-file=-
+#        ... (repeat for each secret below)
+#   4. Deploy:
+#        gcloud run services replace gcp-cloudrun.yaml --region=us-central1
+#
+# Replace <PROJECT_ID> with your actual GCP project ID.
+
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: switchboard
+  annotations:
+    run.googleapis.com/ingress: all
+spec:
+  template:
+    metadata:
+      annotations:
+        # Scale to 0 to minimize cost; set min-instances: "1" for zero cold-start
+        autoscaling.knative.dev/minScale: "0"
+        autoscaling.knative.dev/maxScale: "10"
+        # Allow up to 1000 concurrent requests per instance (FastAPI is async)
+        autoscaling.knative.dev/target: "100"
+    spec:
+      containerConcurrency: 1000
+      timeoutSeconds: 300
+      containers:
+        - image: gcr.io/<PROJECT_ID>/switchboard:latest
+          ports:
+            - containerPort: 8080
+          resources:
+            limits:
+              cpu: "1"
+              memory: 512Mi
+          env:
+            - name: ENVIRONMENT
+              value: "production"
+            - name: PORT
+              value: "8080"
+            - name: MONGO_DB_NAME
+              value: "whatsapp_agent"
+            - name: DRY_RUN_WHATSAPP
+              value: "false"
+            - name: CORS_ORIGINS
+              value: "*"
+            - name: SENTIMENT_HANDOVER_ENABLED
+              value: "true"
+            - name: LLM_PROVIDER
+              value: "openai"
+            # Secrets pulled from GCP Secret Manager
+            - name: MONGO_URI
+              valueFrom:
+                secretKeyRef:
+                  name: MONGO_URI
+                  key: latest
+            - name: WHATSAPP_ACCESS_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: WHATSAPP_ACCESS_TOKEN
+                  key: latest
+            - name: WHATSAPP_PHONE_NUMBER_ID
+              valueFrom:
+                secretKeyRef:
+                  name: WHATSAPP_PHONE_NUMBER_ID
+                  key: latest
+            - name: WHATSAPP_BUSINESS_ACCOUNT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: WHATSAPP_BUSINESS_ACCOUNT_ID
+                  key: latest
+            - name: WHATSAPP_VERIFY_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: WHATSAPP_VERIFY_TOKEN
+                  key: latest
+            - name: WHATSAPP_APP_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: WHATSAPP_APP_SECRET
+                  key: latest
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: OPENAI_API_KEY
+                  key: latest
+          # Liveness / readiness probe
+          livenessProbe:
+            httpGet:
+              path: /api/health
+            initialDelaySeconds: 5
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /api/health
+            initialDelaySeconds: 3
+            periodSeconds: 10
